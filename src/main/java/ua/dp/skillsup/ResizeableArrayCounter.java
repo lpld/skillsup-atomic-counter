@@ -1,6 +1,5 @@
 package ua.dp.skillsup;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -12,15 +11,12 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ResizeableArrayCounter implements Counter {
 
   private static final int HASH_INCREMENT = 0x61c88647;
-  private static final int INITIAL_BUFFER_SIZE = 64;
+  private static final int INITIAL_BUFFER_SIZE = 2;
   private static final int INCREMENT_MAX_ATTEMPTS = 5;
   private static final AtomicInteger nextHashCode = new AtomicInteger();
 
-  private int bufferSize = INITIAL_BUFFER_SIZE;
-  private int bufferMask = bufferSize - 1;
-
   private final AtomicBoolean bufferIsResized = new AtomicBoolean(false);
-  private volatile AtomicLong[] counters = new AtomicLong[bufferSize];
+  private volatile AtomicLong[] counters = new AtomicLong[INITIAL_BUFFER_SIZE];
 
   private static final ThreadLocal<Integer> hashCodeLocal = new ThreadLocal<Integer>() {
     @Override
@@ -31,14 +27,16 @@ public class ResizeableArrayCounter implements Counter {
 
   public ResizeableArrayCounter() {
 
-    for (int i = 0; i < bufferSize; i++) {
+    for (int i = 0; i < INITIAL_BUFFER_SIZE; i++) {
       counters[i] = new AtomicLong();
     }
   }
 
   @Override
   public void inc() {
-    AtomicLong bucket = counters[hashCodeLocal.get() & bufferMask];
+    AtomicLong[] counterLocal = counters;
+
+    AtomicLong bucket = counterLocal[hashCodeLocal.get() & (counterLocal.length - 1)];
 
     boolean updated;
     int attempts = 0;
@@ -62,15 +60,14 @@ public class ResizeableArrayCounter implements Counter {
   }
 
   private void resizeBuffer() {
-    int newSize = bufferSize * 2;
+    int oldSize = counters.length;
+    int newSize = oldSize * 2;
     AtomicLong[] newBuffer = new AtomicLong[newSize];
-    System.arraycopy(counters, 0, newBuffer, 0, bufferSize);
-    for (int i = bufferSize; i < newSize; i ++) {
+    System.arraycopy(counters, 0, newBuffer, 0, oldSize);
+    for (int i = oldSize; i < newSize; i ++) {
       newBuffer[i] = new AtomicLong();
     }
     counters = newBuffer;
-    bufferSize = newSize;
-    bufferMask = newSize - 1;
   }
 
   @Override
