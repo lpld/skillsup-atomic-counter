@@ -34,29 +34,33 @@ public class ResizeableArrayCounter implements Counter {
 
   @Override
   public void inc() {
-    AtomicLong[] counterLocal = counters;
-
-    AtomicLong bucket = counterLocal[hashCodeLocal.get() & (counterLocal.length - 1)];
 
     boolean updated;
-    int attempts = 0;
 
     do {
-      long current = bucket.get();
-      updated = bucket.compareAndSet(current, current + 1);
-      attempts++;
-    } while (attempts <= INCREMENT_MAX_ATTEMPTS && !updated);
+      AtomicLong[] counterLocal = counters;
 
-    if (!updated) {
-      if (bufferIsResized.compareAndSet(false, true)) {
-        resizeBuffer();
+      AtomicLong bucket = counterLocal[hashCodeLocal.get() & (counterLocal.length - 1)];
+      int attempts = 0;
 
-        bufferIsResized.lazySet(false);
+      do {
+        long current = bucket.get();
+        updated = bucket.compareAndSet(current, current + 1);
+        attempts++;
+      } while (attempts <= INCREMENT_MAX_ATTEMPTS && !updated);
+
+      if (!updated) {
+        // if the reference is changed there's no need to resize the array.
+        if (counterLocal == counters && bufferIsResized.compareAndSet(false, true)) {
+          resizeBuffer();
+
+          bufferIsResized.lazySet(false);
+        }
+
       }
+    } while (!updated);
 
-      // not sure about this:
-      inc();
-    }
+
   }
 
   private void resizeBuffer() {
