@@ -35,12 +35,17 @@ public class ResizeableArrayCounter implements Counter {
   @Override
   public void inc() {
 
-    boolean updated;
+    boolean updated = false;
 
     do {
       AtomicLong[] counterLocal = counters;
 
       AtomicLong bucket = counterLocal[hashCodeLocal.get() & (counterLocal.length - 1)];
+
+      // the array may ne not initialized yet:
+      if (bucket == null) {
+        continue;
+      }
       int attempts = 0;
 
       do {
@@ -51,12 +56,17 @@ public class ResizeableArrayCounter implements Counter {
 
       if (!updated) {
         // if the reference is changed there's no need to resize the array.
-        if (counterLocal == counters &&
-            !bufferIsResized.get() &&
-            bufferIsResized.compareAndSet(false, true)) {
+        if (!bufferIsResized.get() &&
+            bufferIsResized.compareAndSet(false, true) &&
+            counterLocal == counters) {
           resizeBuffer();
 
           bufferIsResized.lazySet(false);
+
+          // initializing new part of buffer:
+          for (int i = counters.length / 2; i < counters.length; i++) {
+            counters[i] = new AtomicLong();
+          }
         }
 
       }
@@ -70,9 +80,7 @@ public class ResizeableArrayCounter implements Counter {
     int newSize = oldSize * 2;
     AtomicLong[] newBuffer = new AtomicLong[newSize];
     System.arraycopy(counters, 0, newBuffer, 0, oldSize);
-    for (int i = oldSize; i < newSize; i ++) {
-      newBuffer[i] = new AtomicLong();
-    }
+
     counters = newBuffer;
   }
 
