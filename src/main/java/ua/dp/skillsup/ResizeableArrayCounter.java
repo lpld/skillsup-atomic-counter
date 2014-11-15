@@ -35,17 +35,36 @@ public class ResizeableArrayCounter implements Counter {
   @Override
   public void inc() {
 
-    boolean updated = false;
+    boolean updated;
 
     do {
-      AtomicLong[] counterLocal = counters;
+      AtomicLong[] counterLocal;
 
-      AtomicLong bucket = counterLocal[hashCodeLocal.get() & (counterLocal.length - 1)];
+      AtomicLong bucket;
 
-      // the array may ne not initialized yet:
-      if (bucket == null) {
-        continue;
-      }
+      do {
+        counterLocal = counters;
+        int index = hashCodeLocal.get() & (counterLocal.length - 1);
+
+        bucket = counterLocal[index];
+        if (bucket == null) {
+          if (!bufferIsResized.get() && bufferIsResized.compareAndSet(false, true)) {
+
+            counterLocal = counters;
+            index = hashCodeLocal.get() & (counterLocal.length - 1);
+
+            bucket = counterLocal[index];
+            if (bucket == null) {
+              bucket = new AtomicLong();
+              counterLocal[index] = bucket;
+            }
+
+            bufferIsResized.lazySet(false);
+          }
+        }
+
+      } while (bucket == null);
+
       int attempts = 0;
 
       do {
@@ -63,10 +82,6 @@ public class ResizeableArrayCounter implements Counter {
 
           bufferIsResized.lazySet(false);
 
-          // initializing new part of buffer:
-          for (int i = counters.length / 2; i < counters.length; i++) {
-            counters[i] = new AtomicLong();
-          }
         }
 
       }
@@ -88,7 +103,10 @@ public class ResizeableArrayCounter implements Counter {
   public long get() {
     long value = 0;
     for (AtomicLong counter : counters) {
-      value += counter.get();
+      if (counter != null) {
+        value += counter.get();
+      }
+
     }
 
     return value;
