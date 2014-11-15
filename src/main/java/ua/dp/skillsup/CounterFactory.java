@@ -6,7 +6,7 @@ package ua.dp.skillsup;
  */
 public class CounterFactory {
 	public enum CounterType {
-		ATOMIC, THREAD_LOCAL, DIVIDE_ARRAY
+		ATOMIC, THREAD_LOCAL, DIVIDE_ARRAY, RESIZEABLE_ARRAY
 //      , DIVIDE_ONE, DIVIDE_TWO
 	}
 
@@ -19,8 +19,10 @@ public class CounterFactory {
 
             case DIVIDE_ARRAY:
               return new DivideArrayCounter();
-//			case DIVIDE_TWO:
-//				return new CounterDivideAndRuleOne();
+
+            case RESIZEABLE_ARRAY:
+              return new ResizeableArrayCounter();
+
 		}
 
 		throw new IllegalArgumentException();
