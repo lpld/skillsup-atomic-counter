@@ -51,7 +51,9 @@ public class ResizeableArrayCounter implements Counter {
 
       if (!updated) {
         // if the reference is changed there's no need to resize the array.
-        if (counterLocal == counters && bufferIsResized.compareAndSet(false, true)) {
+        if (counterLocal == counters &&
+            !bufferIsResized.get() &&
+            bufferIsResized.compareAndSet(false, true)) {
           resizeBuffer();
 
           bufferIsResized.lazySet(false);
